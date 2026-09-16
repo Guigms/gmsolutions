@@ -43,7 +43,7 @@ export const PaymentHistoryModal = ({ client, onClose, onChanged }) => {
 
   return (
     <Dialog open={!!client} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent data-testid="payment-history-modal" className="sm:max-w-lg">
+      <DialogContent data-testid="payment-history-modal" className="sm:max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Histórico de pagamentos — {client?.name}</DialogTitle>
         </DialogHeader>

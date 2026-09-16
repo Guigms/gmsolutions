@@ -71,7 +71,7 @@ export const ClientModal = ({ open, onOpenChange, client, onSaved }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="client-modal" className="sm:max-w-md">
+      <DialogContent data-testid="client-modal" className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{client ? "Editar cliente" : "Novo cliente"}</DialogTitle>
         </DialogHeader>

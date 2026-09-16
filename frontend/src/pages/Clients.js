@@ -258,7 +258,7 @@ export default function Clients() {
       />
 
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent data-testid="delete-client-dialog">
+        <DialogContent data-testid="delete-client-dialog" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Excluir cliente</DialogTitle>
           </DialogHeader>
