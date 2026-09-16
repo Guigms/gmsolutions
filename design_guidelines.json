@@ -1,0 +1,147 @@
+{
+  "app_name": "MensaliPay - Gestão & Controle de Mensalidades",
+  "app_type": "dashboard",
+  "archetype": "SWISS & HIGH-CONTRAST FINANCIAL PRO",
+  "language": "pt-BR",
+  "theme": {
+    "default_mode": "light",
+    "has_theme_toggle": true,
+    "primary_accent": "emerald",
+    "status_colors": {
+      "paid": {
+        "badge_bg": "bg-emerald-100 dark:bg-emerald-950/60",
+        "badge_text": "text-emerald-700 dark:text-emerald-400",
+        "border": "border-emerald-200 dark:border-emerald-800",
+        "dot": "bg-emerald-500"
+      },
+      "pending": {
+        "badge_bg": "bg-amber-100 dark:bg-amber-950/60",
+        "badge_text": "text-amber-700 dark:text-amber-400",
+        "border": "border-amber-200 dark:border-amber-800",
+        "dot": "bg-amber-500"
+      },
+      "overdue": {
+        "badge_bg": "bg-rose-100 dark:bg-rose-950/60",
+        "badge_text": "text-rose-700 dark:text-rose-400",
+        "border": "border-rose-200 dark:border-rose-800",
+        "dot": "bg-rose-500"
+      }
+    }
+  },
+  "typography": {
+    "font_family_heading": "'Plus Jakarta Sans', 'Outfit', sans-serif",
+    "font_family_body": "'Inter', -apple-system, sans-serif",
+    "h1": "text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100",
+    "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100",
+    "h3": "text-xl font-semibold tracking-tight text-slate-800 dark:text-slate-200",
+    "h4": "text-lg font-medium text-slate-800 dark:text-slate-200",
+    "body": "text-sm sm:text-base text-slate-6-00 dark:text-slate-300 leading-relaxed",
+    "mono_numeric": "font-mono tracking-tight font-semibold"
+  },
+  "colors": {
+    "light": {
+      "bg_main": "bg-slate-50/70",
+      "surface_card": "bg-white border-slate-200/80 shadow-sm",
+      "surface_header": "bg-white/90 backdrop-blur-md border-b border-slate-200",
+      "text_primary": "text-slate-900",
+      "text_secondary": "text-slate-500",
+      "brand_primary": "bg-emerald-600 hover:bg-emerald-700 text-white",
+      "brand_secondary": "bg-slate-900 hover:bg-slate-800 text-white"
+    },
+    "dark": {
+      "bg_main": "bg-slate-950",
+      "surface_card": "bg-slate-900/90 border-slate-800 shadow-md",
+      "surface_header": "bg-slate-900/90 backdrop-blur-md border-b border-slate-800",
+      "text_primary": "text-slate-100",
+      "text_secondary": "text-slate-400",
+      "brand_primary": "bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold",
+      "brand_secondary": "bg-slate-800 hover:bg-slate-700 text-slate-100"
+    }
+  },
+  "layout_architecture": {
+    "structure": "Sidebar fixa ou colapsável + Top Header com Seletor de Mês/Ano e Ações Rápida + Main Content Area em Bento High Density Grid",
+    "responsive": "Mobile-first com menu drawer expansível e suporte touch-friendly para a ação 'Dar OK'",
+    "bento_grid": {
+      "kpi_row": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6",
+      "main_split": "grid grid-cols-1 lg:grid-cols-12 gap-6",
+      "chart_section": "col-span-1 lg:col-span-8",
+      "summary_section": "col-span-1 lg:col-span-4"
+    }
+  },
+  "key_features_design": [
+    {
+      "feature": "Autenticação JWT",
+      "path": "/src/pages/Login.js, /src/pages/Register.js",
+      "details": "Layout de duas colunas (Split-screen) com side banner estilizado com gradiente sutil e frases de valor financeiro. Inputs com labels explícitos e ícones de visualização de senha."
+    },
+    {
+      "feature": "Dashboard com KPIs Financeiros",
+      "path": "/src/pages/Dashboard.js",
+      "details": "Cards de KPI com valor formatado em R$ (BRL), indicador de tendência (%), comparação com mês anterior e ícone representativo (Lucide icons). Métricas: Recebido no Mês, Pendente no Mês, Em Atraso acumulado, Total de Clientes Ativos e Taxa de Pontualidade."
+    },
+    {
+      "feature": "Gerenciamento de Clientes & Tabela de Pagamentos",
+      "path": "/src/pages/Clients.js",
+      "details": "Tabela interativa de alta densidade com paginação, busca por nome, filtro por dia de vencimento (1 a 31) e status. Botão de ação direta 'Dar OK no Mês' com animação micro-feedback (Sonner toast + check icon transform)."
+    },
+    {
+      "feature": "Cadastro e Edição de Cliente (Modal/Drawer)",
+      "path": "/src/components/ClientModal.js",
+      "details": "Modal Shadcn Dialog com validação de campos: Nome Completo, Valor da Mensalidade (R$), Dia do Vencimento (1 a 31), Telefone/WhatsApp, E-mail e Observações."
+    },
+    {
+      "feature": "Histórico de Pagamentos por Cliente",
+      "path": "/src/components/PaymentHistoryModal.js",
+      "details": "Visualização timeline/extrato com histórico mês a mês, data do pagamento confirmado, valor pago e opção de estornar ou ajustar o pagamento de meses anteriores."
+    },
+    {
+      "feature": "Relatórios Financeiros & Gráficos",
+      "path": "/src/pages/Reports.js",
+      "details": "Relatórios completos utilizando Recharts: Gráfico de barras composto (Recebido vs Pendente), Gráfico de Rosca (Status dos Clientes), Curva de Previsão de Faturamento dos próximos meses e tabela resumida."
+    },
+    {
+      "feature": "Exportação CSV",
+      "path": "/src/utils/exportCsv.js",
+      "details": "Botão com ícone de download para exportação imediata dos dados de clientes e relatórios financeiros filtrados por período."
+    }
+  ],
+  "image_urls": {
+    "dashboard_preview": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwxfHxmaW5hbmNpYWwlMjBkYXNoYm9hcmQlMjBhbmFseXRpY3MlMjBhdmF0YXIlMjB1c2VyJTIwcHJvZmlsZXxlbnwwfHx8fDE3ODk1ODI0MDN8MA&ixlib=rb-4.1.0&q=85",
+    "auth_illustration": "https://images.pexels.com/photos/37685036/pexels-photo-37685036.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "data_testid_rules": {
+    "required": true,
+    "pattern": "kebab-case",
+    "examples": [
+      "data-testid=\"login-email-input\"",
+      "data-testid=\"login-password-input\"",
+      "data-testid=\"login-submit-button\"",
+      "data-testid=\"kpi-received-amount\"",
+      "data-testid=\"kpi-pending-amount\"",
+      "data-testid=\"kpi-overdue-amount\"",
+      "data-testid=\"kpi-active-clients\"",
+      "data-testid=\"client-search-input\"",
+      "data-testid=\"client-status-filter\"",
+      "data-testid=\"client-row-{id}\"",
+      "data-testid=\"mark-paid-button-{clientId}\"",
+      "data-testid=\"add-client-button\"",
+      "data-testid=\"edit-client-button-{clientId}\"",
+      "data-testid=\"delete-client-button-{clientId}\"",
+      "data-testid=\"view-history-button-{clientId}\"",
+      "data-testid=\"export-csv-button\"",
+      "data-testid=\"month-selector\"",
+      "data-testid=\"year-selector\"",
+      "data-testid=\"theme-toggle-button\""
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Utilizar arquivo de extensões .js / .jsx para componentes no ambiente React existente.",
+    "Formatar todos os valores monetários usando a API nativa de internacionalização do JS: `new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)`.",
+    "Implementar sistema de status automático e manual: Se o dia atual for maior que o dia de vencimento do cliente e o mês atual não tiver confirmação de pagamento, o status do cliente é automaticamente exibido como 'Em Atraso'. Se for menor ou igual ao dia de vencimento, exibe 'Pendente'. Ao clicar em 'Dar OK no Mês', registra o pagamento e o status muda imediatamente para 'Pago'.",
+    "Garantir persistência do token JWT no localStorage ou suporte a Mock JWT inteligente com dados reais caso a API backend esteja offline ou em desenvolvimento.",
+    "Utilizar ícones da biblioteca `lucide-react` já instalada (Ex: CheckCircle2, AlertTriangle, Clock, DollarSign, Users, Download, Plus, Trash2, Edit, Calendar, Search, ShieldCheck).",
+    "Utilizar `sonner` para feedback de toast ao realizar ações como dar OK no pagamento, adicionar, editar ou excluir clientes.",
+    "Garantir layout limpo, responsivo, sem rolagem horizontal indesejada e com contraste visual perfeito nos modos claro e escuro.",
+    "Adicionar `data-testid` em absolutamente todos os botões, inputs, tabelas e cards interativos conforme padrão especificado."
+  ]
+}
