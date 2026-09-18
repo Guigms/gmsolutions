@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js"
+    "check": "node --check server.js",
+    "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -16,5 +17,8 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.11.5",
     "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "prisma": "^8.0.0-rc.15"
   }
 }
