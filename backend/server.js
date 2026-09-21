@@ -230,4 +230,4 @@ async function init() {
 }
 app.use((err, req, res, next) => { console.error(err); if (!res.headersSent) res.status(500).json({ detail: "Erro interno do servidor" }); });
 if (require.main === module) init().then(() => app.listen(port, () => console.log(`Backend listening on ${port}`))).catch(e => { console.error("Database initialization failed", e); process.exit(1); });
-module.exports = { app, init, pool };
+module.exports = app;
