@@ -9,6 +9,7 @@
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -19,6 +20,6 @@
     "uuid": "^11.0.5"
   },
   "devDependencies": {
-    "prisma": "^8.0.0-rc.15"
+    "prisma": "^6.19.0"
   }
 }

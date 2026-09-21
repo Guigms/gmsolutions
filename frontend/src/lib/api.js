@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const backendUrl = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+const BASE = `${backendUrl}/api`;
 
 const api = axios.create({ baseURL: BASE, withCredentials: true });
 

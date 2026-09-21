@@ -11,17 +11,18 @@ const app = express();
 const port = Number(process.env.PORT || 8000);
 const jwtSecret = process.env.JWT_SECRET || "development-secret-change-me";
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+const allowedOrigins = frontendUrl.split(",").map((origin) => origin.trim()).filter(Boolean);
 const now = () => new Date();
 const poolOptions = (() => {
   if (process.env.DATABASE_URL) {
     const u = new URL(process.env.DATABASE_URL.replace(/^mysql\+[^:]+:/, "mysql:"));
-    return { host: u.hostname, port: Number(u.port || 3306), user: decodeURIComponent(u.username), password: decodeURIComponent(u.password), database: u.pathname.slice(1) };
+    return { host: u.hostname, port: Number(u.port || 3306), user: decodeURIComponent(u.username), password: decodeURIComponent(u.password), database: u.pathname.slice(1), ssl: process.env.MYSQL_SSL === "true" ? { rejectUnauthorized: false } : undefined };
   }
-  return { host: process.env.MYSQL_HOST || "localhost", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "mensalipay" };
+  return { host: process.env.MYSQL_HOST || "localhost", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "mensalipay", ssl: process.env.MYSQL_SSL === "true" ? { rejectUnauthorized: false } : undefined };
 })();
 const pool = mysql.createPool({ ...poolOptions, waitForConnections: true, connectionLimit: Number(process.env.MYSQL_POOL_SIZE || 10), dateStrings: false });
 
-app.use(cors({ origin: [frontendUrl, "http://localhost:3000"], credentials: true }));
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin) || origin === "http://localhost:3000"), credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -49,12 +50,35 @@ function validClient(body) {
   return body && typeof body.name === "string" && body.name.length > 0 && Number(body.monthly_value) > 0 && Number.isInteger(Number(body.due_day)) && Number(body.due_day) >= 1 && Number(body.due_day) <= 31;
 }
 function monthShift(year, month, delta) { const d = new Date(Date.UTC(year, month - 1 + delta, 1)); return [d.getUTCFullYear(), d.getUTCMonth() + 1]; }
+
+// ====== STATUS ATUALIZADO ======
 function status(client, year, month, paid) {
   if (paid) return "pago";
+
+  const createdDate = new Date(client.created_at || new Date());
+  let firstYear = createdDate.getFullYear();
+  let firstMonth = createdDate.getMonth() + 1;
+
+  if (createdDate.getDate() >= client.due_day) {
+    firstMonth += 1;
+    if (firstMonth > 12) {
+      firstMonth = 1;
+      firstYear += 1;
+    }
+  }
+
+  // Ignora o cliente em meses anteriores à sua primeira cobrança
+  if (year < firstYear || (year === firstYear && month < firstMonth)) {
+    return "inativo";
+  }
+
   const due = new Date(year, month - 1, Math.min(client.due_day, new Date(year, month, 0).getDate()));
-  const today = new Date(); if (year > today.getFullYear() || (year === today.getFullYear() && month > today.getMonth() + 1)) return "previsto";
+  const today = new Date();
+  
+  if (year > today.getFullYear() || (year === today.getFullYear() && month > today.getMonth() + 1)) return "previsto";
   return today > due ? "atrasado" : "pendente";
 }
+
 async function paymentMap(userId, year, month) {
   const rows = await query("SELECT * FROM payments WHERE user_id=? AND year=? AND month=?", [userId, year, month]);
   return Object.fromEntries(rows.map(p => [p.client_id, p]));
@@ -94,16 +118,107 @@ app.post("/api/auth/refresh", async (req, res) => {
 app.post("/api/auth/forgot-password", async (req, res, next) => { try { const u = await one("SELECT id FROM users WHERE email=?", [String(req.body?.email || "").toLowerCase()]); if (u) { const t = require("crypto").randomBytes(24).toString("base64url"); await query("INSERT INTO password_reset_tokens(token,user_id,used,expires_at) VALUES (?,?,0,?)", [t, u.id, new Date(Date.now() + 3600000)]); console.log(`Reset link: /reset-password?token=${t}`); } res.json({ message: "Se o e-mail existir, um link de redefinição foi gerado." }); } catch (e) { next(e); } });
 app.post("/api/auth/reset-password", async (req, res, next) => { try { const { token: t, password } = req.body || {}; if (!password || password.length < 6) return bad(res, 400, "Senha deve ter ao menos 6 caracteres"); const r = await one("SELECT * FROM password_reset_tokens WHERE token=? AND used=0 AND expires_at>NOW()", [t]); if (!r) return bad(res, 400, "Token inválido ou expirado"); await query("UPDATE users SET password_hash=? WHERE id=?", [await bcrypt.hash(password, 10), r.user_id]); await query("UPDATE password_reset_tokens SET used=1 WHERE token=?", [t]); res.json({ message: "Senha redefinida com sucesso" }); } catch (e) { next(e); } });
 
-app.get("/api/clients", auth, async (req, res, next) => { try { const year = Number(req.query.year), month = Number(req.query.month), map = await paymentMap(req.user.id, year, month); let rows = await clientsFor(req.user.id); if (req.query.search) rows = rows.filter(c => c.name.toLowerCase().includes(String(req.query.search).toLowerCase())); if (req.query.due_day) rows = rows.filter(c => c.due_day === Number(req.query.due_day)); res.json(rows.map(c => ({ id: c.id, name: c.name, monthly_value: Number(c.monthly_value), due_day: c.due_day, phone: c.phone, email: c.email, notes: c.notes, active: !!c.active, status: status(c, year, month, !!map[c.id]), paid_at: map[c.id]?.paid_at?.toISOString?.() || null, paid_amount: map[c.id] ? Number(map[c.id].amount) : null })).filter(c => !req.query.status || c.status === req.query.status)); } catch (e) { next(e); } });
+// ====== ROTAS CORRIGIDAS COM FILTRO ======
+app.get("/api/clients", auth, async (req, res, next) => { 
+  try { 
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = Number(req.query.month) || new Date().getMonth() + 1;
+    const map = await paymentMap(req.user.id, year, month); 
+    let rows = await clientsFor(req.user.id); 
+    
+    if (req.query.search) rows = rows.filter(c => c.name.toLowerCase().includes(String(req.query.search).toLowerCase())); 
+    if (req.query.due_day) rows = rows.filter(c => c.due_day === Number(req.query.due_day)); 
+    
+    res.json(rows.map(c => {
+      const s = status(c, year, month, !!map[c.id]);
+      return { id: c.id, name: c.name, monthly_value: Number(c.monthly_value), due_day: c.due_day, phone: c.phone, email: c.email, notes: c.notes, active: !!c.active, status: s, paid_at: map[c.id]?.paid_at?.toISOString?.() || null, paid_amount: map[c.id] ? Number(map[c.id].amount) : null };
+    }).filter(c => c.status !== "inativo" && (!req.query.status || c.status === req.query.status))); 
+  } catch (e) { next(e); } 
+});
+
 app.post("/api/clients", auth, async (req, res, next) => { try { if (!validClient(req.body)) return bad(res, 422, "Dados inválidos"); const id = uuid(), b = req.body; await query("INSERT INTO clients (id,user_id,name,monthly_value,due_day,phone,email,notes,active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)", [id, req.user.id, b.name, b.monthly_value, b.due_day, b.phone || null, b.email || null, b.notes || null, b.active === false ? 0 : 1, now()]); res.json({ id }); } catch (e) { next(e); } });
 app.put("/api/clients/:id", auth, async (req, res, next) => { try { if (!validClient(req.body)) return bad(res, 422, "Dados inválidos"); const b = req.body; const r = await query("UPDATE clients SET name=?,monthly_value=?,due_day=?,phone=?,email=?,notes=?,active=? WHERE id=? AND user_id=?", [b.name, b.monthly_value, b.due_day, b.phone || null, b.email || null, b.notes || null, b.active === false ? 0 : 1, req.params.id, req.user.id]); if (!r.affectedRows) return bad(res, 404, "Cliente não encontrado"); res.json({ message: "Cliente atualizado" }); } catch (e) { next(e); } });
 app.delete("/api/clients/:id", auth, async (req, res, next) => { try { const r = await query("DELETE FROM clients WHERE id=? AND user_id=?", [req.params.id, req.user.id]); await query("DELETE FROM payments WHERE client_id=? AND user_id=?", [req.params.id, req.user.id]); if (!r.affectedRows) return bad(res, 404, "Cliente não encontrado"); res.json({ message: "Cliente excluído" }); } catch (e) { next(e); } });
 app.post("/api/clients/:id/payment", auth, async (req, res, next) => { try { const { year, month } = req.body || {}, c = await one("SELECT * FROM clients WHERE id=? AND user_id=?", [req.params.id, req.user.id]); if (!c) return bad(res, 404, "Cliente não encontrado"); const p = await one("SELECT id FROM payments WHERE client_id=? AND user_id=? AND year=? AND month=?", [req.params.id, req.user.id, year, month]); if (p) { await query("DELETE FROM payments WHERE id=?", [p.id]); return res.json({ status: "estornado" }); } await query("INSERT INTO payments (id,user_id,client_id,year,month,amount,paid_at) VALUES (?,?,?,?,?,?,?)", [uuid(), req.user.id, req.params.id, year, month, c.monthly_value, now()]); res.json({ status: "pago" }); } catch (e) { next(e); } });
 app.get("/api/clients/:id/payments", auth, async (req, res, next) => { try { if (!await one("SELECT id FROM clients WHERE id=? AND user_id=?", [req.params.id, req.user.id])) return bad(res, 404, "Cliente não encontrado"); const rows = await query("SELECT * FROM payments WHERE client_id=? AND user_id=? ORDER BY year DESC, month DESC", [req.params.id, req.user.id]); res.json(rows.map(p => ({ id: p.id, year: p.year, month: p.month, amount: Number(p.amount), paid_at: p.paid_at.toISOString() }))); } catch (e) { next(e); } });
 
-app.get("/api/dashboard", auth, async (req, res, next) => { try { const year = Number(req.query.year), month = Number(req.query.month), rows = await clientsFor(req.user.id, true), map = await paymentMap(req.user.id, year, month), counts = { pago: 0, pendente: 0, atrasado: 0, previsto: 0 }; let received = 0, pending = 0, overdue = 0; const overdueList = []; rows.forEach(c => { const s = status(c, year, month, !!map[c.id]); counts[s]++; if (map[c.id]) received += Number(map[c.id].amount); else if (s === "atrasado") { overdue += Number(c.monthly_value); overdueList.push({ id: c.id, name: c.name, monthly_value: Number(c.monthly_value), due_day: c.due_day }); } else pending += Number(c.monthly_value); }); res.json({ received, pending, overdue, active_clients: rows.length, punctuality: rows.length ? Math.round(counts.pago / rows.length * 1000) / 10 : 0, status_counts: counts, overdue_list: overdueList.sort((a, b) => a.due_day - b.due_day) }); } catch (e) { next(e); } });
-app.get("/api/reports", auth, async (req, res, next) => { try { const y = Number(req.query.year), m = Number(req.query.month), rows = await clientsFor(req.user.id, true), expected = rows.reduce((s, c) => s + Number(c.monthly_value), 0), ps = await query("SELECT year,month,SUM(amount) amount FROM payments WHERE user_id=? GROUP BY year,month", [req.user.id]), map = Object.fromEntries(ps.map(p => [`${p.year}-${p.month}`, Number(p.amount)])); const monthly = [], forecast = []; for (let d = -5; d <= 0; d++) { const [yy, mm] = monthShift(y, m, d), received = map[`${yy}-${mm}`] || 0; monthly.push({ year: yy, month: mm, received, pending: Math.max(expected - received, 0) }); } for (let d = 1; d <= 6; d++) { const [yy, mm] = monthShift(y, m, d); forecast.push({ year: yy, month: mm, expected }); } res.json({ monthly, forecast, expected }); } catch (e) { next(e); } });
-app.get("/api/reports/export", auth, async (req, res, next) => { try { const y = Number(req.query.year), m = Number(req.query.month), rows = await clientsFor(req.user.id), map = await paymentMap(req.user.id, y, m), labels = { pago: "Pago", pendente: "Pendente", atrasado: "Em atraso", previsto: "A vencer" }; let csv = "Cliente;Valor Mensalidade (R$);Dia Vencimento;Status;Data Pagamento;Telefone;E-mail\n"; rows.forEach(c => { const p = map[c.id], s = status(c, y, m, !!p), date = p ? new Date(p.paid_at).toLocaleString("pt-BR", { timeZone: "UTC" }) : ""; csv += [c.name, Number(c.monthly_value).toFixed(2).replace(".", ","), c.due_day, labels[s], date, c.phone || "", c.email || ""].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";") + "\n"; }); res.type("text/csv").attachment(`mensalidades_${y}_${String(m).padStart(2, "0")}.csv`).send(csv); } catch (e) { next(e); } });
+app.get("/api/dashboard", auth, async (req, res, next) => { 
+  try { 
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = Number(req.query.month) || new Date().getMonth() + 1;
+    const rows = await clientsFor(req.user.id, true); 
+    const map = await paymentMap(req.user.id, year, month); 
+    const counts = { pago: 0, pendente: 0, atrasado: 0, previsto: 0 }; 
+    let received = 0, pending = 0, overdue = 0; 
+    const overdueList = []; 
+    
+    rows.forEach(c => { 
+      const s = status(c, year, month, !!map[c.id]); 
+      if (s === "inativo") return; // Ignora o cliente para esse mês!
+
+      counts[s]++; 
+      if (map[c.id]) received += Number(map[c.id].amount); 
+      else if (s === "atrasado") { 
+        overdue += Number(c.monthly_value); 
+        overdueList.push({ id: c.id, name: c.name, monthly_value: Number(c.monthly_value), due_day: c.due_day }); 
+      } else pending += Number(c.monthly_value); 
+    }); 
+    
+    const active_clients = counts.pago + counts.pendente + counts.atrasado + counts.previsto;
+    const punctuality = active_clients ? Math.round(counts.pago / active_clients * 1000) / 10 : 0;
+    
+    res.json({ received, pending, overdue, active_clients, punctuality, status_counts: counts, overdue_list: overdueList.sort((a, b) => a.due_day - b.due_day) }); 
+  } catch (e) { next(e); } 
+});
+
+app.get("/api/reports", auth, async (req, res, next) => { 
+  try { 
+    const y = Number(req.query.year) || new Date().getFullYear();
+    const m = Number(req.query.month) || new Date().getMonth() + 1;
+    const rows = await clientsFor(req.user.id, true); 
+    
+    const ps = await query("SELECT year,month,SUM(amount) amount FROM payments WHERE user_id=? GROUP BY year,month", [req.user.id]);
+    const map = Object.fromEntries(ps.map(p => [`${p.year}-${p.month}`, Number(p.amount)])); 
+    
+    const monthly = [], forecast = []; 
+    for (let d = -5; d <= 0; d++) { 
+      const [yy, mm] = monthShift(y, m, d), received = map[`${yy}-${mm}`] || 0; 
+      let monthExpected = 0;
+      rows.forEach(c => { if (status(c, yy, mm, false) !== "inativo") monthExpected += Number(c.monthly_value); });
+      monthly.push({ year: yy, month: mm, received, pending: Math.max(monthExpected - received, 0) }); 
+    } 
+    for (let d = 1; d <= 6; d++) { 
+      const [yy, mm] = monthShift(y, m, d); 
+      let monthExpected = 0;
+      rows.forEach(c => { if (status(c, yy, mm, false) !== "inativo") monthExpected += Number(c.monthly_value); });
+      forecast.push({ year: yy, month: mm, expected: monthExpected }); 
+    } 
+    
+    let currentExpected = 0;
+    rows.forEach(c => { if (status(c, y, m, false) !== "inativo") currentExpected += Number(c.monthly_value); });
+
+    res.json({ monthly, forecast, expected: currentExpected }); 
+  } catch (e) { next(e); } 
+});
+
+app.get("/api/reports/export", auth, async (req, res, next) => { 
+  try { 
+    const y = Number(req.query.year) || new Date().getFullYear();
+    const m = Number(req.query.month) || new Date().getMonth() + 1;
+    const rows = await clientsFor(req.user.id); 
+    const map = await paymentMap(req.user.id, y, m); 
+    const labels = { pago: "Pago", pendente: "Pendente", atrasado: "Em atraso", previsto: "A vencer", inativo: "Inativo" }; 
+    let csv = "Cliente;Valor Mensalidade (R$);Dia Vencimento;Status;Data Pagamento;Telefone;E-mail\n"; 
+    
+    rows.forEach(c => { 
+      const p = map[c.id], s = status(c, y, m, !!p); 
+      if (s === "inativo") return; // Não exporta clientes que ainda não eram clientes neste mês
+      const date = p ? new Date(p.paid_at).toLocaleString("pt-BR", { timeZone: "UTC" }) : ""; 
+      csv += [c.name, Number(c.monthly_value).toFixed(2).replace(".", ","), c.due_day, labels[s], date, c.phone || "", c.email || ""].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";") + "\n"; 
+    }); 
+    res.type("text/csv").attachment(`mensalidades_${y}_${String(m).padStart(2, "0")}.csv`).send(csv); 
+  } catch (e) { next(e); } 
+});
 
 async function init() {
   await query("CREATE TABLE IF NOT EXISTS users (id VARCHAR(36) PRIMARY KEY,name VARCHAR(120) NOT NULL,email VARCHAR(320) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,role VARCHAR(30) NOT NULL DEFAULT 'user',created_at DATETIME NOT NULL)");
